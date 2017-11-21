@@ -9,7 +9,7 @@ import io.netty.handler.codec.LengthFieldBasedFrameDecoder;
 import io.netty.handler.codec.LengthFieldPrepender;
 import io.netty.handler.codec.string.StringDecoder;
 import io.netty.handler.codec.string.StringEncoder;
-import io.netty.handler.ssl.SslHandler;
+import io.netty.handler.timeout.IdleStateHandler;
 import io.netty.util.CharsetUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,6 +20,7 @@ import javax.net.ssl.TrustManagerFactory;
 import java.io.FileInputStream;
 import java.io.InputStream;
 import java.security.KeyStore;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by sk-cailicheng on 2017/9/21.
@@ -60,19 +61,20 @@ public class TcpClient {
                 @Override
                 protected void initChannel(Channel ch) throws Exception {
                     ChannelPipeline pipeline = ch.pipeline();
-                    pipeline.addFirst("ssl", new SslHandler(sslEngine));
+//                    pipeline.addFirst("ssl", new SslHandler(sslEngine));
 
                     pipeline.addLast("frameDecoder", new LengthFieldBasedFrameDecoder(Integer.MAX_VALUE, 0, 4, 0, 4));
                     pipeline.addLast("frameEncoder", new LengthFieldPrepender(4));
                     pipeline.addLast("decoder", new StringDecoder(CharsetUtil.UTF_8));
                     pipeline.addLast("encoder", new StringEncoder(CharsetUtil.UTF_8));
+                    pipeline.addLast("ping", new IdleStateHandler(0, 5, 0, TimeUnit.SECONDS));
                     pipeline.addLast("handler", new TcpClientHandler());
                 }
             });
             b.option(ChannelOption.SO_KEEPALIVE, true);
             return b;
         } catch (Exception e) {
-            System.out.println("error: " + e);
+            LOGGER.error("error: " + e);
         }
         return null;
     }
@@ -83,7 +85,6 @@ public class TcpClient {
             channel = bootstrap.connect(host, port).sync().channel();
         } catch (Exception e) {
             LOGGER.error("连接Server(IP{},PORT{})失败", host, port, e);
-            System.out.println("连接Server(IP{" + host + "},PORT{" + port + "})失败" + e);
             return null;
         }
         return channel;
@@ -94,23 +95,16 @@ public class TcpClient {
             channel.writeAndFlush(msg).sync();
         } else {
             LOGGER.warn("消息发送失败,连接尚未建立!");
-            System.out.println("消息发送失败,连接尚未建立!");
         }
     }
 
     public static void main(String[] args) {
         try {
-            long t0 = System.nanoTime();
-            for (int i = 0; i < 100; i++) {
+            for (int i = 0; i < 10; i++) {
                 TcpClient.sendMsg(i + "你好!");
             }
-
-            long t1 = System.nanoTime();
-            LOGGER.info("time used:{}", t1 - t0);
-            System.out.println("time used:{" + (t1 - t0) + "}");
         } catch (Exception e) {
             LOGGER.error("main err:", e);
-            System.out.println("main err:" + e);
         }
     }
 }
